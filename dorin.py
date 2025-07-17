@@ -17,9 +17,10 @@ Created on Wed Feb 23 12:55:43 2022
 #     vorne und hinten wird jeweils ein Bereich abgeschnitten, um geometrische Ausreiser zu entfernen
 # v9: Threshold an zwei Stellen "if D_x_filtered_deriv_filtered[i]<1e-4:" auf 1e-4 geaendert (fuer Auswertung der WZV sZW ..)
 
-from pylab import *
-#import matplotlib.pyplot as plt
-#import numpy as np  # if you use numpy functions
+#from pylab import *
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import numpy as np  # if you use numpy functions
 
 from scipy.interpolate import UnivariateSpline
 from scipy.interpolate import interp1d
@@ -28,6 +29,7 @@ import open3d as o3d
 import os
 import locale
 from scipy.signal import savgol_filter
+import sys
 
 
 #rc('text', usetex=True)
@@ -77,16 +79,20 @@ modpath='/Users/admin/Projects/'+SpecimenID+'/'+SpecimenFolder+'_'
 file= 'specimenFull.ply'
 
 
-
 ####
 # Convert 3D to 2D hull
 
 
 
 File = path + file
+
+if not os.path.exists(File):
+    print(f"ERROR: File not found: {File}")
+    sys.exit(1)
+    
 pcd_read = o3d.io.read_point_cloud(File)  #pcd_read is an object of type open3d.geometry.PointCloud. It holds the point cloud data you just loaded from your .ply file using Open3D’s read_point_cloud() function.
 
-points_matrix = asarray(pcd_read.points)   #Now, to work with these points using NumPy or Pandas, you need them in a NumPy array format. asarray() converts this Open3D Vector3dVector into a standard NumPy array
+points_matrix = np.array(pcd_read.points)   #Now, to work with these points using NumPy or Pandas, you need them in a NumPy array format. asarray() converts this Open3D Vector3dVector into a standard NumPy array
 # plt.plot(points_matrix[:,2],points_matrix[:,1])
 
 # X=pd.DataFrame(points_matrix)*10**3
@@ -143,22 +149,26 @@ ZZ=ZZ.to_numpy()
 #Figure 1
 fig1=plt.figure(1,figsize=(7,5), dpi=150, facecolor='white')  #✅ This creates a new figure window for the plot.1 is the figure number.figsize=(7,5) sets the size of the figure in inches.dpi=150 means the figure resolution is 150 dots per inch. facecolor='white' makes the background white.
 
-ax = axes(projection ='3d') #✅ This creates a 3D axis system inside the figure. axes(projection='3d') tells Matplotlib we want a 3D plot.
+ax = fig1.add_subplot(111, projection='3d') #✅ This creates a 3D axis system inside the figure. axes(projection='3d') tells Matplotlib we want a 3D plot.
 ax.scatter(XX,YY,ZZ,c='black') #✅ This creates a 3D scatter plot on those axes. XX, YY, ZZ are arrays of the x, y, z coordinates of your points.c='black' makes the points black.
-xlabel(r'Specimen Edges $\ h$ $[\text{mm}]$') #✅ These set the axis labels for X, Y, and Z axes. The r'...' tells Python this is a raw string — good for LaTeX-style math text like $\ h$.The labels indicate physical meanings and units for each axis.
-ylabel(r'Cut Coordinate $\ h$ $[\text{mm}]$')
+ax.set_xlabel(r'Specimen Edges $\ h$ $[\text{mm}]$') #✅ These set the axis labels for X, Y, and Z axes. The r'...' tells Python this is a raw string — good for LaTeX-style math text like $\ h$.The labels indicate physical meanings and units for each axis.
+ax.set_ylabel(r'Cut Coordinate $\ h$ $[\text{mm}]$')
 ax.set_zlabel(r'Specimen Height $\ h$ $[\text{mm}]$')
-tight_layout() #✅ This automatically adjusts the figure’s layout to ensure labels and titles fit nicely without overlapping.
+plt.tight_layout() #✅ This automatically adjusts the figure’s layout to ensure labels and titles fit nicely without overlapping.
 Filename=sys.argv[0]
 Filename=modpath + r'Fig1.pdf'    #Better way : 
                                                     #Filename_pdf = modpath + 'Fig1.pdf' 
                                                     #Filename_png = modpath + 'Fig1.png'
                                                     #fig1.savefig(Filename_pdf)
                                                     #fig1.savefig(Filename_png)
-Filename=modpath + r'Fig1.png'
+Filename1_pdf = modpath + 'Fig1.pdf'
+Filename1_png = modpath + 'Fig1.png'
 
+fig1.savefig(Filename1_pdf)
+fig1.savefig(Filename1_png, dpi=300)
+print(f"Figure 1 saved as:\n→ {Filename1_pdf}\n→ {Filename1_png}")
 
-savefig(Filename)  #✅ These two lines assign filenames to save your figure. modpath is a string containing the path where you want to save the file.
+  #✅ These two lines assign filenames to save your figure. modpath is a string containing the path where you want to save the file.
 plt.show()
 sys.exit()
 
