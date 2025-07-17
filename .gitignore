@@ -1,0 +1,20 @@
+# Ignore virtual environments
+myvenv/
+venv/
+
+# Ignore large folders you don't want to track
+AZK6z2/
+documents-export-2025-7-3/
+
+# Ignore zip files
+*.zip
+Results_Cleaned.xlsx
+2022-04_AVIFA314_RobBruch_final_Auszug.pptx
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+
+
+.DS_Store
