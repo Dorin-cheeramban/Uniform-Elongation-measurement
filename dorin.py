@@ -1,175 +1,179 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Feb 23 12:55:43 2022
-
-@author: Erb, Kmn
-"""
-
-# v1: h_max inserted in the last 4 plots instead of fixed values
-# v2: Some further printing and output improvement
-# v3: l_th export correction
-# v4: Slide modifications and automatization
-# v5: (�berf�hrt in 11_* f�hr zu fr�h abgeschnittene Proben)
-# v6: Anderer Speicherort (eine Ebene hoeher) um Schreibrechteproblematik zu entschaerfen, falls jemand anderes die ply aus makemake erzeugt hat & 
-#     in eps_ue_integral Suche von l2 ausgehend nach vorne, so dass Problem behoben, dass nicht genug x-Werte vorliegen
-#     Bei der Bestimmung des Minimums des Durchmessers ist dieser nun auf min 1e-3 begrenzt
-#     vorne und hinten wird jeweils ein Bereich abgeschnitten, um geometrische Ausreiser zu entfernen
-# v9: Threshold an zwei Stellen "if D_x_filtered_deriv_filtered[i]<1e-4:" auf 1e-4 geaendert (fuer Auswertung der WZV sZW ..)
-
-#from pylab import *
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import numpy as np  # if you use numpy functions
-
-from scipy.interpolate import UnivariateSpline
-from scipy.interpolate import interp1d
+from matplotlib.ticker import FormatStrFormatter
+import numpy as np
 import pandas as pd
 import open3d as o3d
+from scipy.interpolate import interp1d
 import os
-import locale
-from scipy.signal import savgol_filter
 import sys
+import math
+from numpy import vectorize
 
 
-#rc('text', usetex=True)
-#rc('font', family='serif', serif='charter')
-#rc('text.latex', preamble=r'\usepackage{amstext}'
-                           #r"\usepackage[squaren]{SIunits}"
-                           #r"\usepackage[bitstream-charter]{mathdesign}"
-                           #r"\usepackage{setspace}"
-                           #r"\usepackage{nicefrac}"
-                           #r"\doublespacing"
-                           #r"\setlength{\parindent}{0pt}")
-#serif='charter' <-- Text TUD Schriftart
-#SIUnits <-- F�r Celsius usw. http://computer.wer-weiss-was.de/textverarbeitung/banale_frage_zu_latex-1874179.html
-#amstext <-- \text{} in Formeln m�glich
-#bitstream-charter <-- TUD Formel-Schriftarten
-#setspace, onehalfspaceing <-- Abstand bei Zeilenumbruch
-#setlength <-- Erste Zeile nicht einger�ckt
-#locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
-###
-# Load Meshlab lib
-#os.system('source /opt/python/3.10_latest/bin/activate')
+def load_and_slice_pcd(file_path, y_slice_center=0.0, slice_thickness=0.0001):
+    pcd = o3d.io.read_point_cloud(file_path)
+    points = np.asarray(pcd.points)
+    df = pd.DataFrame(points, columns=["X", "Y", "Z"])
+    mask = (df["Y"] > y_slice_center - slice_thickness) & (df["Y"] < y_slice_center + slice_thickness)
+    return df[mask][["X", "Y", "Z"]].to_numpy().T
 
-
-SpecimenID=str(sys.argv[1])  #'AZK6z3'
-SpecimenFolder=str(sys.argv[2])  #'Eval_top'
-
-d0 = float(sys.argv[3])  #8.15 #mm
-l1 = float(sys.argv[4])  #20.0 #mm
-l2 = float(sys.argv[5])  #30.0 #mm
-h_max = float(sys.argv[6])  #36.0 #mm
-
-l1_th_fix=float(sys.argv[7])  #5e-3 dD/dh threshhold
-min_Factor=float(sys.argv[8])  #2 dD/dh threshhold
-d0_auto_Factor=float(sys.argv[9])  #1 Factor between du2 und d0
-
-exportFileSuffix='_'+str(sys.argv[10])    #standard'
-
-#/Users/admin/Projects
-
-#path='/mnt/KB-H/TV/02_Forschungsvorhaben/D56-RobusteBruchverformungskennwerte/04_Daten/Scans/0001_Test_GUI_V1/'+SpecimenID+'/'+SpecimenFolder+'/'
-path='/Users/admin/Projects/'+SpecimenID+'/'+SpecimenFolder+'/'
-
-#modpath='/mnt/KB-H/TV/02_Forschungsvorhaben/D56-RobusteBruchverformungskennwerte/04_Daten/Scans/0001_Test_GUI_V1/'+SpecimenID+'/'+SpecimenFolder+'_'
-modpath='/Users/admin/Projects/'+SpecimenID+'/'+SpecimenFolder+'_'
-
-
-file= 'specimenFull.ply'
-
-
-####
-# Convert 3D to 2D hull
-
-
-
-File = path + file
-
-if not os.path.exists(File):
-    print(f"ERROR: File not found: {File}")
-    sys.exit(1)
+def plot_scatter(x, y, xlabel, ylabel, filename_base, marker='x', color='black'):
+    fig, ax = plt.subplots(figsize=(7, 5), dpi=150)
+    ax.plot(x, y, ls='none', marker=marker, mec=color, ms=2., zorder=2)
+    ax.set_xlabel(xlabel, fontsize=16)
+    ax.set_ylabel(ylabel, fontsize=16)
+    ax.tick_params(axis='both', labelsize=14)
+    ax.set_axisbelow(True)
+    ax.xaxis.set_major_formatter(FormatStrFormatter('%1.0f'))
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%1.3e'))
+    ax.grid(which='major', axis='both', linewidth=1., linestyle='-', color='0.6')
+    ax.grid(which='minor', axis='both', linewidth=0.5, linestyle='-', color='0.75')
+    plt.tight_layout()
+    plt.savefig(filename_base + '.pdf')
+    plt.savefig(filename_base + '.png', dpi=300)
+    print(f"Figure 2 saved as:\n→ {filename_base}.pdf\n→ {filename_base}.png")
     
-pcd_read = o3d.io.read_point_cloud(File)  #pcd_read is an object of type open3d.geometry.PointCloud. It holds the point cloud data you just loaded from your .ply file using Open3D’s read_point_cloud() function.
 
-points_matrix = np.array(pcd_read.points)   #Now, to work with these points using NumPy or Pandas, you need them in a NumPy array format. asarray() converts this Open3D Vector3dVector into a standard NumPy array
-# plt.plot(points_matrix[:,2],points_matrix[:,1])
+def separate_min_max(x, z):
+    x = np.asarray(x)
+    z = np.asarray(z)
+    return (x[x > 0], z[x > 0]), (x[x <= 0], z[x <= 0])
 
-# X=pd.DataFrame(points_matrix)*10**3
-X=pd.DataFrame(points_matrix)  #points_matrix at this point is a NumPy array with shape (N, 3) — meaning N points, each with 3 values: [x, y, z]. Now we convert this NumPy array to a Pandas DataFrame named X.
+def compute_specimen_diameter(Z_max, X_max, Z_min, X_min, h_max, modpath):
+    # Check if there's enough data
+    if len(Z_max) < 2 or len(Z_min) < 2:
+        print("Skipping Fig4: Not enough data points for interpolation.")
+        return None, None, None
+    
+    # Sort and remove duplicate Z values for stability
+    def dedup_and_sort(Z, X):
+        df = pd.DataFrame({'Z': Z, 'X': X}).sort_values(by='Z')
+        df = df.drop_duplicates(subset='Z')  # Keep only first entry per Z
+        return df['Z'].values, df['X'].values
 
-print(X[1].min(), X[1].max())
+    Z_max, X_max = dedup_and_sort(Z_max, X_max)
+    Z_min, X_min = dedup_and_sort(Z_min, X_min)
+
+    Edge_max_x_interp = interp1d(Z_max, X_max, kind='linear', bounds_error=False, fill_value="extrapolate")
+    Edge_min_x_interp = interp1d(Z_min, X_min, kind='linear', bounds_error=False, fill_value="extrapolate")
+    start_x = max(Z_max[0], Z_min[0])
+    end_x = min(Z_max[-1], Z_min[-1])
+    x_field = np.linspace(start_x, end_x, 1000)
+    D_x = Edge_max_x_interp(x_field) - Edge_min_x_interp(x_field)
+    
+    x_field_reverse = x_field[::-1]
+    D_x_interp = interp1d(x_field_reverse, D_x, kind='linear', bounds_error=False, fill_value="extrapolate")
+    D_x = D_x_interp(x_field)
+
+    fig4, ax4 = plt.subplots(figsize=(7, 5), dpi=150, facecolor='white')
+    ax4.plot(x_field, D_x, ls='none', marker='x', mec='black', ms=2., zorder=2)
+    ax4.set_xlabel("Specimen Height [mm]", fontsize=16)
+    ax4.set_ylabel("Specimen Diameter [mm]", fontsize=16, rotation=90)
+    ax4.tick_params(axis='both', labelsize=14)
+    ax4.set_axisbelow(True)
+    ax4.set_xlim(-0.5, h_max)
+    ax4.xaxis.set_major_formatter(FormatStrFormatter('%1.3f'))
+    ax4.yaxis.set_major_formatter(FormatStrFormatter('%1.2e'))
+    ax4.xaxis.set_ticks_position('both')
+    plt.tight_layout()
+    fig4.savefig(modpath + 'Fig4.pdf')
+    fig4.savefig(modpath + 'Fig4.png', dpi=300)
+    print(f"Figure 4 saved as:\n→ {modpath + 'Fig4.pdf'}\n→ {modpath + 'Fig4.png'}")
+    
+    return x_field,D_x,D_x_interp
+
+def eps_ue(l1, l2, d0, D_x_interp):
+    d1 = D_x_interp(l1)
+    d2 = D_x_interp(l2)
+    d_avg = (d1 + d2) / 2.0
+    strain = (((d0 / d_avg) ** 2) - 1) * 100.
+    return d1, d2, strain   
+
+def eps_ue_integral(l1, l2, d0, D_x_interp):
+    l0 = l2 - l1
+    V0 = math.pi * (d0 ** 2) / 4. * l0
+
+    dx = 0.001
+    integrand = 0.
+    dxres = 0.
+    VolumeResult = 0.
+    x = dx / 2.
+
+    while VolumeResult < V0:
+        integrand += (D_x_interp(l2 - x) / 2.) ** 2 * dx
+        VolumeResult = math.pi * integrand
+        x += dx
+        dxres += dx
+
+    return (dxres - l0) / l0 * 100.
+
+eps_ue_integral = vectorize(eps_ue_integral)
+
+def main():
+    if len(sys.argv) != 11:
+        print("Usage: script.py SpecimenID SpecimenFolder d0 l1 l2 h_max l1_th_fix min_Factor d0_auto_Factor exportFileSuffix")
+        sys.exit(1)
+
+    SpecimenID, SpecimenFolder = sys.argv[1], sys.argv[2]
+    d0, l1, l2, h_max = map(float, sys.argv[3:7])
+    l1_th_fix, min_Factor, d0_auto_Factor = map(float, sys.argv[7:10])
+    exportFileSuffix = '_' + str(sys.argv[10])
+
+    base_path = f'/home/dorin/projects/{SpecimenID}/{SpecimenFolder}/'
+    file_path = os.path.join(base_path, 'specimenFull.ply')
+    modpath = f'/home/dorin/projects/{SpecimenID}/{SpecimenFolder}_' + exportFileSuffix + '_'
+
+    if not os.path.exists(file_path):
+        print(f"ERROR: File not found: {file_path}")
+        sys.exit(1)
+
+    XX, YY, ZZ = load_and_slice_pcd(file_path)
+
+    fig1 = plt.figure(figsize=(7, 5), dpi=150, facecolor='white')
+    ax = fig1.add_subplot(111, projection='3d')
+    ax.scatter(XX, YY, ZZ, c='black')
+    ax.set_xlabel("Specimen Edges [mm]")
+    ax.set_ylabel("Cut Coordinate [mm]")
+    ax.set_zlabel("Specimen Height [mm]")
+    plt.tight_layout()
+    fig1.savefig(modpath + 'Fig1newone.pdf')
+    fig1.savefig(modpath + 'Fig1newone.png', dpi=300)
+    print(f"Figure 1 saved as:\n→ {modpath + 'Fig1newone.pdf'} \n→ {modpath  + 'Fig1newone.png'}")
+    
+
+    plot_scatter(ZZ, XX, "Specimen Height [mm]", "Specimen Edges [mm]", modpath + 'Fig2new')
+
+    (X_max, Z_max), (X_min, Z_min) = separate_min_max(XX, ZZ)
+    fig3, ax3 = plt.subplots(figsize=(7, 5), dpi=150)
+    ax3.plot(Z_max, X_max, ls='none', marker='x', mec='red', ms=2., zorder=2)
+    ax3.plot(Z_min, X_min, ls='none', marker='x', mec='orange', ms=2., zorder=2)
+    ax3.set_xlabel("Specimen Height [mm]", fontsize=16)
+    ax3.set_ylabel("Specimen Edges [mm]", fontsize=16)
+    ax3.tick_params(axis='both', labelsize=14)
+    ax3.grid(True)
+    plt.tight_layout()
+    fig3.savefig(modpath + 'Fig3new.pdf')
+    fig3.savefig(modpath + 'Fig3new.png', dpi=300)
+    print(f"Figure 3 saved as:\n→ {modpath + 'Fig3new.pdf'}\n→ {modpath + 'Fig3new.png'}")
+    
+
+    x_field, D_X, D_X_interp = compute_specimen_diameter(Z_max, X_max, Z_min, X_min, h_max, modpath )
+    
+    if  D_X_interp is not None:
+        d1,d2, strain = eps_ue(l1, l2, d0, D_X_interp)
+        strain_integral = eps_ue_integral(l1, l2, d0, D_X_interp)
+        print(f'Diameter at l1: {d1:.3f}')
+        print(f'Diameter at l2:{d2:.3f}')
+        print(f'Uniform Elongation Strain using Tangent Method:{strain:.3f} %')
+        print(f'Uniform Elongation Strain using Integeral Method:{strain_integral:.3f} %')
+        
+
+    plt.show()
+    plt.close()
+
+if __name__ == '__main__':
+    main()
 
 
-print(min(X[1])) #X[1] accesses column 1 of DataFrame X, which contains all y-values of the points. min(X[1]) finds the minimum y-coordinate value in your point cloud. Then it prints this minimum y-value.
-
-
-
-
-
-#3D View
-d3_View = 0  #If d3_View is set to 1, it shows the full 3D point cloud interactively using Open3D’s viewer. Here it's 0, so it skips this step.
-if d3_View == 1:
-    o3d.visualization.draw_geometries([pcd_read])
-
-#select region for example y_values=const.  #Select a horizontal 2D "slice" of points at a specific Y-coordinate
-
-#value=0  #ou're choosing a Y-value = 228 (your "cutting plane"). intervall defines a small range around 228 (like a thin horizontal band).
-#value=228  
-
-value = 0
-
-intervall=0.0001
-
-
-
-value_plus=value+intervall  #So the band lies between 227.9999 and 228.0001.
-value_minus=value-intervall
-
-XX=X[0][(X[1]>value_minus) & (X[1]<value_plus)]  #This filters all the points whose Y-coordinate falls inside that band. Then extracts their corresponding X, Y, and Z values.
-YY=X[1][(X[1]>value_minus) & (X[1]<value_plus)]
-ZZ=X[2][(X[1]>value_minus) & (X[1]<value_plus)]
-
-#XX=X[0]
-#YY=X[1]
-#ZZ=X[2]
-
-
-
-print(XX)
-print(ZZ)
-XX=XX.to_numpy()  #So that Matplotlib can easily handle them for plotting
-YY=YY.to_numpy()
-ZZ=ZZ.to_numpy()
-
-
-
-
-#plot 3D
-#Figure 1
-fig1=plt.figure(1,figsize=(7,5), dpi=150, facecolor='white')  #✅ This creates a new figure window for the plot.1 is the figure number.figsize=(7,5) sets the size of the figure in inches.dpi=150 means the figure resolution is 150 dots per inch. facecolor='white' makes the background white.
-
-ax = fig1.add_subplot(111, projection='3d') #✅ This creates a 3D axis system inside the figure. axes(projection='3d') tells Matplotlib we want a 3D plot.
-ax.scatter(XX,YY,ZZ,c='black') #✅ This creates a 3D scatter plot on those axes. XX, YY, ZZ are arrays of the x, y, z coordinates of your points.c='black' makes the points black.
-ax.set_xlabel(r'Specimen Edges $\ h$ $[\text{mm}]$') #✅ These set the axis labels for X, Y, and Z axes. The r'...' tells Python this is a raw string — good for LaTeX-style math text like $\ h$.The labels indicate physical meanings and units for each axis.
-ax.set_ylabel(r'Cut Coordinate $\ h$ $[\text{mm}]$')
-ax.set_zlabel(r'Specimen Height $\ h$ $[\text{mm}]$')
-plt.tight_layout() #✅ This automatically adjusts the figure’s layout to ensure labels and titles fit nicely without overlapping.
-Filename=sys.argv[0]
-Filename=modpath + r'Fig1.pdf'    #Better way : 
-                                                    #Filename_pdf = modpath + 'Fig1.pdf' 
-                                                    #Filename_png = modpath + 'Fig1.png'
-                                                    #fig1.savefig(Filename_pdf)
-                                                    #fig1.savefig(Filename_png)
-Filename1_pdf = modpath + 'Fig1.pdf'
-Filename1_png = modpath + 'Fig1.png'
-
-fig1.savefig(Filename1_pdf)
-fig1.savefig(Filename1_png, dpi=300)
-print(f"Figure 1 saved as:\n→ {Filename1_pdf}\n→ {Filename1_png}")
-
-  #✅ These two lines assign filenames to save your figure. modpath is a string containing the path where you want to save the file.
-plt.show()
-sys.exit()
 
 
