@@ -83,15 +83,19 @@ def compute_specimen_diameter(Z_max, X_max, Z_min, X_min, h_max, modpath):
     
     return x_field,D_X,D_X_interp
 
-def eps_ue(l1, l2, d0, D_X_interp):
+def eps_ue(l2, l1, d0, D_X_interp):
     d1 = D_X_interp(l1)
     d2 = D_X_interp(l2)
     d_avg = (d1 + d2) / 2.0
-    strain = (((d0 / d_avg) ** 2) - 1) * 100.
-    return d1, d2, strain   
+    strain_tangent = (((d0 / d_avg) ** 2) - 1) * 100.
+    return d1, d2, strain_tangent   
 
-def eps_ue_integral(l1, l2, d0, D_X_interp):
+def eps_ue_integral(l2,l1, d0, D_X_interp):
     l0 = l2 - l1
+    if abs(l0) < 1e-6:
+        print("⚠️ Integral strain skipped: l1 and l2 are too close.")
+        return float('nan')
+    
     V0 = math.pi * (d0 ** 2) / 4. * l0
 
     dx = 0.001
@@ -105,27 +109,51 @@ def eps_ue_integral(l1, l2, d0, D_X_interp):
         VolumeResult = math.pi * integrand
         x += dx
         dxres += dx
+        #print(f"[eps_ue_integral] dxres (effective integrated length): {dxres:.6f} mm")
 
     return (dxres - l0) / l0 * 100.
 
-eps_ue_integral = vectorize(eps_ue_integral)
+eps_ue_integral_value = vectorize(eps_ue_integral)
 
 
 def auto_window_size(data_length, divisor=50, min_size=5):
     size = max(int(data_length / divisor), min_size)
-    return size + 1 if size % 2 == 0 else size
+    size = 101
+    return size
+    #return size + 1 if size % 2 == 0 else size
+
+def auto_window_size_for_Derivative (data_length, divisor=50, min_size=5):
+    size = max(int(data_length / divisor), min_size)
+    size = 201
+    return size
+    
 
 def auto_poly_order(window_size):
     if window_size < 7:
         return 1
     elif window_size < 15:
-        return 3
+        return 1
     else:
-        return 5
+        return 1
 
 def apply_savgol_auto(data, deriv=0):
     data = np.asarray(data)
     window_size = auto_window_size(len(data))
+    poly_order = auto_poly_order(window_size)
+
+
+    # Final safety checks
+    if poly_order >= window_size:
+        poly_order = max(1, window_size - 2)
+    if window_size % 2 == 0:
+        window_size += 1
+
+    #print(f"[Auto SGFilter] Deriv={deriv}, Window={window_size}, PolyOrder={poly_order}")
+    return savgol_filter(data, window_length=window_size, polyorder=poly_order, deriv=deriv)
+
+def apply_savgol_auto_Derivative (data, deriv=0):
+    data = np.asarray(data)
+    window_size = auto_window_size_for_Derivative(len(data))
     poly_order = auto_poly_order(window_size)
 
     # Final safety checks
@@ -137,10 +165,11 @@ def apply_savgol_auto(data, deriv=0):
     #print(f"[Auto SGFilter] Deriv={deriv}, Window={window_size}, PolyOrder={poly_order}")
     return savgol_filter(data, window_length=window_size, polyorder=poly_order, deriv=deriv)
 
+
 def process_diameter_profile_auto(D_X):
     D_X_filtered = apply_savgol_auto( D_X, deriv=0)          # Step 1: Smooth diameter
     D_X_derivative = apply_savgol_auto( D_X, deriv=1)        # Step 2: Compute derivative
-    D_X_derivative_smoothed = apply_savgol_auto(D_X_derivative, deriv=0)  # Step 3: Smooth derivative
+    D_X_derivative_smoothed = apply_savgol_auto_Derivative(D_X_derivative, deriv=0)  # Step 3: Smooth derivative
 
     return D_X_filtered, D_X_derivative, D_X_derivative_smoothed
 
@@ -174,14 +203,14 @@ def plot_diameter_comparison(x_field, D_x, D_x_filtered, modpath):
 def plot_derivative_comparison(x_field, D_X_derivative,D_X_derivative_smoothed, modpath):
     fig20, ax = plt.subplots(figsize=(7, 5), dpi=150, facecolor='white')
     ax.plot(x_field, D_X_derivative, ls='-', lw=2, c='black', zorder=2, label='Diameter Derivative')
-    ax.plot(x_field, D_X_derivative_smoothed, ls='-', lw=2, c='red', zorder=2, label='Filtered Derivative')
+    ax.plot(x_field, D_X_derivative_smoothed, ls='--', lw=2, c='red', zorder=2, label='Filtered Derivative')
     ax.set_xlabel("Specimen Height [mm]", fontsize=16)
     ax.set_ylabel("Diameter Derivative [mm/mm]", fontsize=16, rotation=90)
 
     ax.tick_params(axis='both', labelsize=14)
     ax.set_xscale('linear')
     ax.set_yscale('linear')
-    ax.set_xlim(0, 30)
+    ax.set_xlim(-0.5, 30)
     ax.set_ylim(0, 0.025)
 
     # Format tick labels
@@ -202,6 +231,84 @@ def plot_derivative_comparison(x_field, D_X_derivative,D_X_derivative_smoothed, 
     print(f"Figure 20 saved as:\n→ {filename_base}.pdf\n→ {filename_base}.png")
 
 
+
+
+
+# def find_l1_l2(x_field, D_X_derivative_smoothed, l1_th_fix, h_max, d0, D_X_interp):
+#     min_deriv = D_X_derivative_smoothed[0]
+#     l2 = x_field[0]
+#     l1 = x_field[0]
+
+#     find = False
+
+#     for i in range(1,len(D_X_derivative_smoothed)):
+#         if D_X_derivative_smoothed[0] < 1e-3 :
+#             print(" D_X Fileterd data too low")
+#             break
+
+#         # ✅ Update l2 if smaller derivative found (true minimum)
+#         if D_X_derivative_smoothed[i] < min_deriv:
+#             min_deriv = D_X_derivative_smoothed[i]
+#             l2 = x_field[i]
+            
+
+#         # ✅ Set l1 when first value below threshold (only once)
+#         if D_X_derivative_smoothed[i] < l1_th_fix and find == False:
+#             find = True
+#             l1 = x_field[i]
+#             print(l1)
+
+#         # Don't go past h_max
+#         if x_field[i] > h_max:
+#             break
+
+#     l2_abs = l2
+#     l1_abs = l1
+#     min_derivative = min_deriv
+
+#     # ✅ Compute strain only if l1 and l2 are usable
+#     d1_abs, d2_abs, strain_tangent = eps_ue(l1_abs, l2_abs, d0, D_X_interp)
+#     strain_integral = eps_ue_integral(l2_abs, l1_abs, d0, D_X_interp)
+
+#     return l2_abs, l1_abs, min_derivative, strain_tangent, strain_integral, d1_abs, d2_abs
+
+
+
+def justfindl2(x_field, D_X_derivative_smoothed, h_max):
+    min_deriv = D_X_derivative_smoothed[0]
+    l2 = x_field[0]
+
+    for i in range(1,len(D_X_derivative_smoothed)):
+        if D_X_derivative_smoothed[0] < 1e-3 :
+            print(" D_X Fileterd data too low")
+            break
+
+        # ✅ Update l2 if smaller derivative found (true minimum)
+        if D_X_derivative_smoothed[i] < min_deriv:
+            min_deriv = D_X_derivative_smoothed[i]
+            l2 = x_field[i]
+
+        if x_field[i] > h_max:
+            break
+    
+    return l2, min_deriv
+
+def justfindl1(x_field, D_X_derivative_smoothed,l1_th_fix, h_max):
+    l1 = x_field[0]
+
+    for i in range(1,len(D_X_derivative_smoothed)):
+
+        if x_field[i] > h_max:
+            break
+    
+        #✅ Set l1 when first value below threshold (only once)
+        if D_X_derivative_smoothed[i] < l1_th_fix:
+            l1 = x_field[i]
+            return l1
+
+        
+    return None
+                        
 
 
 def main():
@@ -255,12 +362,13 @@ def main():
     x_field, D_X, D_X_interp = compute_specimen_diameter(Z_max, X_max, Z_min, X_min, h_max, modpath )
     
     if  D_X_interp is not None:
-        d1,d2, strain = eps_ue(l1, l2, d0, D_X_interp)
-        strain_integral = eps_ue_integral(l1, l2, d0, D_X_interp)
+        d1,d2, strain_tangent = eps_ue(l2, l1, d0, D_X_interp)
+        strain_integral = eps_ue_integral(l2, l1, d0, D_X_interp)
+
         print(f'Diameter at l1: {d1:.3f}')
-        print(f'Diameter at l2:{d2:.3f}')
-        print(f'Uniform Elongation Strain using Tangent Method:{strain:.3f} %')
-        print(f'Uniform Elongation Strain using Integeral Method:{strain_integral:.3f} %')
+        print(f'Diameter at l2: {d2:.3f}')
+        print(f'Uniform Elongation Strain using Tangent Method :{strain_tangent:.3f} %')
+        print(f'Uniform Elongation Strain using Integeral Method :{strain_integral:.3f} %')
         
     D_X_filtered, D_X_derivative, D_X_derivative_smoothed = process_diameter_profile_auto(D_X)
 
@@ -268,10 +376,34 @@ def main():
 
     plot_derivative_comparison(x_field, D_X_derivative,D_X_derivative_smoothed, modpath)
 
+        
+    #l2_abs, l1_abs,min_derivative_abs,strain_tangent,strain_integral,d1_abs,d2_abs = find_l1_l2(x_field,D_X_derivative_smoothed,h_max,l1_th_fix,d0,D_X_interp)
 
+    # print("\n                           +++")
+    # print("Results using hardcoded threshold for l1 and minimum for l2:")
+    # print(f"l1_abs: {l1_abs:.5f}")
+    # print(f"l2_abs: {l2_abs:.5f}")
+    # print(f"d1_abs: {d1_abs:.5f}")
+    # print(f"d2_abs: {d2_abs:.5f}")
+    # print(f"Minimum diameter derivative_abs: {min_derivative_abs:.5e}")
+    # if strain_tangent is not None:
+    #     print(f"Uniform Elongation (Tangent): {strain_tangent:.3f} %")
+    #     print(f"Uniform Elongation (Integral): {strain_integral:.3f} %")
+    #print("x_field:", x_field)
+    #print("D_X_derivative_smoothed : " , D_X_derivative_smoothed )
     
-    plt.show()
-    plt.close()
+    #plt.show()
+    #plt.close()
+
+    l2_abs, min_dia_deriv = justfindl2(x_field, D_X_derivative_smoothed, h_max)
+    print(f'my just find l2 absolute is : {l2_abs} mm ')
+    print(f'my Minimum Diameter Derivatrive is : {min_dia_deriv} mm ')
+
+    l1_abs = justfindl1(x_field,D_X_derivative_smoothed,l1_th_fix, h_max)
+    if l1_abs is not None:
+        print(f'my just find l1 absolute is : {l1_abs} mm ')
+    else : 
+        print("⚠️ l1 could not be determined.")
 
 if __name__ == '__main__':
     main()
