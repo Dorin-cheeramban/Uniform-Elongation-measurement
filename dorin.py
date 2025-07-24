@@ -198,8 +198,6 @@ def plot_diameter_comparison(x_field, D_x, D_x_filtered, modpath):
     print(f"Figure 10 saved as:\n→ {filename_base}.pdf\n→ {filename_base}.png")
 
 
-
-
 def plot_derivative_comparison(x_field, D_X_derivative,D_X_derivative_smoothed, modpath):
     fig20, ax = plt.subplots(figsize=(7, 5), dpi=150, facecolor='white')
     ax.plot(x_field, D_X_derivative, ls='-', lw=2, c='black', zorder=2, label='Diameter Derivative')
@@ -229,49 +227,6 @@ def plot_derivative_comparison(x_field, D_X_derivative,D_X_derivative_smoothed, 
     fig20.savefig(filename_base + '.pdf')
     fig20.savefig(filename_base + '.png', dpi=300)
     print(f"Figure 20 saved as:\n→ {filename_base}.pdf\n→ {filename_base}.png")
-
-
-
-
-
-# def find_l1_l2(x_field, D_X_derivative_smoothed, l1_th_fix, h_max, d0, D_X_interp):
-#     min_deriv = D_X_derivative_smoothed[0]
-#     l2 = x_field[0]
-#     l1 = x_field[0]
-
-#     find = False
-
-#     for i in range(1,len(D_X_derivative_smoothed)):
-#         if D_X_derivative_smoothed[0] < 1e-3 :
-#             print(" D_X Fileterd data too low")
-#             break
-
-#         # ✅ Update l2 if smaller derivative found (true minimum)
-#         if D_X_derivative_smoothed[i] < min_deriv:
-#             min_deriv = D_X_derivative_smoothed[i]
-#             l2 = x_field[i]
-            
-
-#         # ✅ Set l1 when first value below threshold (only once)
-#         if D_X_derivative_smoothed[i] < l1_th_fix and find == False:
-#             find = True
-#             l1 = x_field[i]
-#             print(l1)
-
-#         # Don't go past h_max
-#         if x_field[i] > h_max:
-#             break
-
-#     l2_abs = l2
-#     l1_abs = l1
-#     min_derivative = min_deriv
-
-#     # ✅ Compute strain only if l1 and l2 are usable
-#     d1_abs, d2_abs, strain_tangent = eps_ue(l1_abs, l2_abs, d0, D_X_interp)
-#     strain_integral = eps_ue_integral(l2_abs, l1_abs, d0, D_X_interp)
-
-#     return l2_abs, l1_abs, min_derivative, strain_tangent, strain_integral, d1_abs, d2_abs
-
 
 
 def justfindl2(x_field, D_X_derivative_smoothed, h_max):
@@ -376,34 +331,30 @@ def main():
 
     plot_derivative_comparison(x_field, D_X_derivative,D_X_derivative_smoothed, modpath)
 
-        
-    #l2_abs, l1_abs,min_derivative_abs,strain_tangent,strain_integral,d1_abs,d2_abs = find_l1_l2(x_field,D_X_derivative_smoothed,h_max,l1_th_fix,d0,D_X_interp)
-
-    # print("\n                           +++")
-    # print("Results using hardcoded threshold for l1 and minimum for l2:")
-    # print(f"l1_abs: {l1_abs:.5f}")
-    # print(f"l2_abs: {l2_abs:.5f}")
-    # print(f"d1_abs: {d1_abs:.5f}")
-    # print(f"d2_abs: {d2_abs:.5f}")
-    # print(f"Minimum diameter derivative_abs: {min_derivative_abs:.5e}")
-    # if strain_tangent is not None:
-    #     print(f"Uniform Elongation (Tangent): {strain_tangent:.3f} %")
-    #     print(f"Uniform Elongation (Integral): {strain_integral:.3f} %")
-    #print("x_field:", x_field)
-    #print("D_X_derivative_smoothed : " , D_X_derivative_smoothed )
+    if strain_tangent is not None:
+        print(f"Uniform Elongation (Tangent): {strain_tangent:.3f} %")
+        print(f"Uniform Elongation (Integral): {strain_integral:.3f} %")
     
     #plt.show()
     #plt.close()
 
     l2_abs, min_dia_deriv = justfindl2(x_field, D_X_derivative_smoothed, h_max)
-    print(f'my just find l2 absolute is : {l2_abs} mm ')
-    print(f'my Minimum Diameter Derivatrive is : {min_dia_deriv} mm ')
+    print(f'L2 absolute is : {l2_abs} mm ')
+    print(f'Minimum Diameter Derivatrive is : {min_dia_deriv} mm ')
 
     l1_abs = justfindl1(x_field,D_X_derivative_smoothed,l1_th_fix, h_max)
     if l1_abs is not None:
-        print(f'my just find l1 absolute is : {l1_abs} mm ')
+        print(f'L1 absolute is : {l1_abs} mm ')
     else : 
         print("⚠️ l1 could not be determined.")
+
+    if  D_X_interp is not None:
+        d1_abs,d2_abs, strain_tangent_abs = eps_ue(l2_abs, l1_abs, d0, D_X_interp)
+        strain_integral_abs = eps_ue_integral(l2_abs, l1_abs, d0, D_X_interp)
+        print(f'Diameter at L1 absolute is : {d1_abs} mm ')
+        print(f'Diameter at L2 absolute is : {d2_abs} mm ')
+        print(f'Absolute Uniform Elongation ( Tangent ) : {strain_tangent_abs} mm ')
+        print(f'Absolute Uniform Elongation ( Integeral ) : {strain_integral_abs} mm ')
 
 if __name__ == '__main__':
     main()
