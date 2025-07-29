@@ -109,7 +109,6 @@ def eps_ue_integral(l2,l1, d0, D_X_interp):
         VolumeResult = math.pi * integrand
         x += dx
         dxres += dx
-        #print(f"[eps_ue_integral] dxres (effective integrated length): {dxres:.6f} mm")
 
     return (dxres - l0) / l0 * 100.
 
@@ -198,6 +197,8 @@ def plot_diameter_comparison(x_field, D_x, D_x_filtered, modpath):
     print(f"Figure 10 saved as:\n→ {filename_base}.pdf\n→ {filename_base}.png")
 
 
+
+
 def plot_derivative_comparison(x_field, D_X_derivative,D_X_derivative_smoothed, modpath):
     fig20, ax = plt.subplots(figsize=(7, 5), dpi=150, facecolor='white')
     ax.plot(x_field, D_X_derivative, ls='-', lw=2, c='black', zorder=2, label='Diameter Derivative')
@@ -229,7 +230,7 @@ def plot_derivative_comparison(x_field, D_X_derivative,D_X_derivative_smoothed, 
     print(f"Figure 20 saved as:\n→ {filename_base}.pdf\n→ {filename_base}.png")
 
 
-def justfindl2(x_field, D_X_derivative_smoothed, h_max):
+def justfindl2(x_field, D_X_derivative_smoothed,h_max):
     min_deriv = D_X_derivative_smoothed[0]
     l2 = x_field[0]
 
@@ -252,10 +253,8 @@ def justfindl1(x_field, D_X_derivative_smoothed,l1_th_fix, h_max):
     l1 = x_field[0]
 
     for i in range(1,len(D_X_derivative_smoothed)):
-
         if x_field[i] > h_max:
             break
-    
         #✅ Set l1 when first value below threshold (only once)
         if D_X_derivative_smoothed[i] < l1_th_fix:
             l1 = x_field[i]
@@ -263,7 +262,66 @@ def justfindl1(x_field, D_X_derivative_smoothed,l1_th_fix, h_max):
 
         
     return None
-                        
+
+def l1_var_1(x_field, D_X_derivative_smoothed,h_max,D_X_interp,d0_auto_Factor,min_Factor):
+    l2,_ = justfindl2(x_field, D_X_derivative_smoothed, h_max)
+    l2_index = np.argmin(np.abs(x_field - l2))
+    min_deriv = D_X_derivative_smoothed[l2_index]
+    threshold = min_deriv * min_Factor
+    sorted_indices = np.argsort(D_X_derivative_smoothed)
+    derivatives_sorted = D_X_derivative_smoothed[sorted_indices]
+    xfield_sorted = x_field[sorted_indices]
+    derivatives_interp = interp1d(derivatives_sorted, xfield_sorted, kind='linear', bounds_error=False, fill_value="extrapolate")
+    l1_var_1 = derivatives_interp(threshold)
+    d0_auto = D_X_interp(l2)*d0_auto_Factor
+
+        
+    return l1_var_1, d0_auto,derivatives_interp
+
+def findl2_variant3(x_field, D_X_filtered, h_max,d0):
+    
+    for i in range(1,len(D_X_filtered)):
+        if x_field[i] > h_max:
+            break 
+        if D_X_filtered[i] >= d0:
+            l2_variant_3 = x_field[i]
+            return l2_variant_3
+
+
+def findl1_variant3(x_field, D_X_derivative_smoothed, h_max):
+    min_deriv = D_X_derivative_smoothed[0]
+    l1_var_3 = x_field[0]
+
+    for i in range(1,len(D_X_derivative_smoothed)):
+        if x_field[i] > h_max:
+            break
+
+        if D_X_derivative_smoothed[0] < 1e-3 :
+            print(" D_X Fileterd data too low")
+            break
+
+        # ✅ Update l2 if smaller derivative found (true minimum)
+        if D_X_derivative_smoothed[i] < min_deriv:
+            min_deriv = D_X_derivative_smoothed[i]
+            l1_var_3 = x_field[i]
+            
+        
+    return l1_var_3, min_deriv
+
+def eps_ue(l2, l1, d0, D_X_interp):
+    d1 = D_X_interp(l1)
+    d2 = D_X_interp(l2)
+    d_avg = (d1 + d2) / 2.0
+    strain_tangent = (((d0 / d_avg) ** 2) - 1) * 100.
+    return d1, d2, strain_tangent   
+
+
+def strain_using_Diameter_Curve(d1,d2,d0):
+    d_avg = (d1 + d2) / 2.0
+    strain_tangent = (((d0 / d_avg) ** 2) - 1) * 100.
+    return strain_tangent   
+
+                    
 
 
 def main():
@@ -320,6 +378,9 @@ def main():
         d1,d2, strain_tangent = eps_ue(l2, l1, d0, D_X_interp)
         strain_integral = eps_ue_integral(l2, l1, d0, D_X_interp)
 
+        print("\n                           +++")
+        print("\n                           ")
+        print("Results using User Defined Values L1 and L2:")
         print(f'Diameter at l1: {d1:.3f}')
         print(f'Diameter at l2: {d2:.3f}')
         print(f'Uniform Elongation Strain using Tangent Method :{strain_tangent:.3f} %')
@@ -332,29 +393,83 @@ def main():
     plot_derivative_comparison(x_field, D_X_derivative,D_X_derivative_smoothed, modpath)
 
     if strain_tangent is not None:
-        print(f"Uniform Elongation (Tangent): {strain_tangent:.3f} %")
-        print(f"Uniform Elongation (Integral): {strain_integral:.3f} %")
+        print(f"Uniform Strain (Tangent): {strain_tangent:.3f} %")
+        print(f"Uniform Strain (Integral): {strain_integral:.3f} %")
+    
     
     #plt.show()
     #plt.close()
 
-    l2_abs, min_dia_deriv = justfindl2(x_field, D_X_derivative_smoothed, h_max)
-    print(f'L2 absolute is : {l2_abs} mm ')
-    print(f'Minimum Diameter Derivatrive is : {min_dia_deriv} mm ')
+    print("\n                           +++")
+    print("\n     Results using hardcoded threshold for l1 and minimum for l2:")
 
+    l2_abs, min_dia_deriv = justfindl2(x_field, D_X_derivative_smoothed, h_max)
     l1_abs = justfindl1(x_field,D_X_derivative_smoothed,l1_th_fix, h_max)
     if l1_abs is not None:
-        print(f'L1 absolute is : {l1_abs} mm ')
+        print(f'L1 absolute is : {l1_abs:.3f} mm ')
     else : 
         print("⚠️ l1 could not be determined.")
+    print(f'L2 absolute is : {l2_abs:.3f} mm ')
+    print(f'Minimum Diameter Derivatrive is : {min_dia_deriv:.7f} mm ')
+
+    
+
 
     if  D_X_interp is not None:
         d1_abs,d2_abs, strain_tangent_abs = eps_ue(l2_abs, l1_abs, d0, D_X_interp)
         strain_integral_abs = eps_ue_integral(l2_abs, l1_abs, d0, D_X_interp)
-        print(f'Diameter at L1 absolute is : {d1_abs} mm ')
-        print(f'Diameter at L2 absolute is : {d2_abs} mm ')
-        print(f'Absolute Uniform Elongation ( Tangent ) : {strain_tangent_abs} mm ')
-        print(f'Absolute Uniform Elongation ( Integeral ) : {strain_integral_abs} mm ')
+        print(f'Diameter at L1 absolute is : {d1_abs:.3f} mm ')
+        print(f'Diameter at L2 absolute is : {d2_abs:.3f} mm ')
+        print(f'Absolute Uniform Strain ( Tangent ) : {strain_tangent_abs:.3f} % ')
+        print(f'Absolute Uniform Strain ( Integeral ) : {strain_integral_abs:.3f} % ')
+
+    print("\n                           +++")
+    print("       Results using Relative threshold for l1 and minimum for l2 :")
+    L1_variant_1, d0_auto,derivatives_interpolation = l1_var_1(x_field, D_X_derivative_smoothed,h_max,D_X_interp,d0_auto_Factor,min_Factor)
+    print(f'L1 for Variant 1 & 2 is : {L1_variant_1:.3f}')
+    print(f'L2 Variant 1 & 2 is : {l2_abs:.3f}')
+    print(f'Do_Auto is : {d0_auto:.3f}')
+
+    print("\n                           +++")
+    print("       Results for Variant 2 :")
+
+    d1_var1,d2_var1,strain_tangent_var2 = eps_ue(l2_abs,L1_variant_1,d0,D_X_interp)
+    print(f'Relative Uniform Strain ( Tangent ) Var 2: {strain_tangent_var2:.3f} % ')
+    print(f'd1 ( Tangent ) Var 1 & 2: {d1_var1:.3f} mm ')
+    print(f'd2( Tangent ) Var 1 & 2: {d2_var1:.3f} mm ')
+
+    straing_integeral_var_2 = eps_ue_integral(l2_abs,L1_variant_1,d0,D_X_interp)
+    print(f'Relative Uniform Strain ( Integeral ) variant 2: {straing_integeral_var_2:.3f} % ')
+
+    print("\n                           +++")
+    print("       Results for Variant 1 :")
+
+    _,_,strain_tangent_var1 = eps_ue(l2_abs,L1_variant_1,d0_auto,D_X_interp)
+    print(f'Relative Uniform Strain ( Tangent ) Variant 1: {strain_tangent_var1:.3f} % ')
+
+    straing_integeral_var_1 = eps_ue_integral(l2_abs,L1_variant_1,d0_auto,D_X_interp)
+    print(f'Relative Uniform Strain ( Integeral ) variant 1: {straing_integeral_var_1:.3f} % ')
+
+    print("\n                           +++")
+    print("       Results for Variant 3 :")
+
+    l1_variant_3,_ = findl1_variant3(x_field, D_X_derivative_smoothed,h_max)
+    l2_variant_3= findl2_variant3(x_field, D_X_filtered, h_max,d0)
+    print(f'L1 for Variant 3 is : {l1_variant_3:.3f}')
+    print(f'L2 for Variant 3 is : {l2_variant_3:.3f}')
+    
+
+    d1_var3,d2_var3,strain_tangent_var3 = eps_ue(l2_variant_3,l1_variant_3,d0,D_X_interp)
+    print(f'd1 Var 3: {d1_var3:.5f} mm ')
+    print(f'd2 Var 3: {d2_var3:.5f} mm ')
+
+    print(f'Relative Uniform Strain ( Tangent ) Variant 3: {strain_tangent_var3:.3f} % ')
+
+    straing_integeral_var_3 = eps_ue_integral(l2_variant_3,l1_variant_3,d0,D_X_interp)
+    print(f'Relative Uniform Strain ( Integeral ) variant 3: {straing_integeral_var_3:.3f} % ')
+
+  
+
 
 if __name__ == '__main__':
     main()
