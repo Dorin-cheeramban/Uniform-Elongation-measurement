@@ -321,6 +321,37 @@ def strain_using_Diameter_Curve(d1,d2,d0):
     strain_tangent = (((d0 / d_avg) ** 2) - 1) * 100.
     return strain_tangent   
 
+
+def plot_L1_L2(x_field,D_X_derivative_smoothed,l1,l2, h_max,modpath, fig_id,y_min = 2e-5,y_max = 2e-2):
+    fig, ax = plt.subplots(figsize=(7, 5), dpi=150, facecolor='white')
+    ax.plot(x_field, D_X_derivative_smoothed, ls='-', lw=2, c='black', zorder=2, label='Diameter Derivative Smoothed')
+    ax.plot([l1,l1],[y_min,y_max], ls=':', lw=1, c='black', zorder=1, label='Line L1')
+    ax.plot([l2,l2],[y_min,y_max], ls=':', lw=1, c='red', zorder=1, label='Line L2')
+    ax.set_xlabel("Specimen Height [mm]", fontsize=16)
+    ax.set_ylabel("Diameter Derivative Smoothed [mm/mm]", fontsize=16)
+
+    ax.tick_params(axis='both', labelsize=14)
+    ax.set_xscale('linear')
+    ax.set_yscale('log')
+    ax.set_xlim(0, h_max)
+    #ax.set_ylim(0, 0.025)
+
+    # Format tick labels
+    ax.xaxis.set_major_formatter(FormatStrFormatter('%1.2f'))
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%1.2e'))
+
+    # Grid
+    ax.set_axisbelow(True)
+    ax.grid(which='major', axis='both', linewidth=1., linestyle='-', color='0.6')
+    ax.grid(which='minor', axis='both', linewidth=0.5, linestyle='-', color='0.75')
+
+    ax.legend(loc='best', fontsize=14)
+    plt.tight_layout()
+
+    filename_base = f"{modpath} Fig{fig_id}" 
+    fig.savefig(filename_base + '.pdf')
+    fig.savefig(filename_base + '.png', dpi=300)
+    print(f"Figure {fig_id} saved as:\n→ {filename_base}.pdf\n→ {filename_base}.png")
                     
 
 
@@ -397,8 +428,7 @@ def main():
         print(f"Uniform Strain (Integral): {strain_integral:.3f} %")
     
     
-    #plt.show()
-    #plt.close()
+   
 
     print("\n                           +++")
     print("\n     Results using hardcoded threshold for l1 and minimum for l2:")
@@ -468,9 +498,12 @@ def main():
     straing_integeral_var_3 = eps_ue_integral(l2_variant_3,l1_variant_3,d0,D_X_interp)
     print(f'Relative Uniform Strain ( Integeral ) variant 3: {straing_integeral_var_3:.3f} % ')
 
-  
+    plot_L1_L2(x_field,D_X_derivative_smoothed,l1_abs,l2_abs,h_max, modpath,fig_id='30')
+    plot_L1_L2(x_field,D_X_derivative_smoothed,L1_variant_1,l2_abs,h_max, modpath,fig_id='40')
+    plot_L1_L2(x_field,D_X_derivative_smoothed,l1_variant_3,l2_variant_3,h_max, modpath,fig_id='50')
 
-
+    plt.show()
+    plt.close()
 if __name__ == '__main__':
     main()
 
