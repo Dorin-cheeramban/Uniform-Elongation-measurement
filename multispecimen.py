@@ -183,6 +183,11 @@ def eps_ue(l2, l1, d0, D_X_interp):
     strain_tangent = (((d0 / d_avg) ** 2) - 1) * 100.
     return d1, d2, strain_tangent
 
+def strain_frustum_fun(l2, l1, d0, D_X_interp):
+    d1 = float(D_X_interp(l1))
+    d2 = float(D_X_interp(l2))
+    strain_frustum_value = ( (3.0 * d0**2) / (d1**2 + d1*d2 + d2**2) - 1.0 ) * 100.0
+    return strain_frustum_value
 
 def eps_ue_integral(l2, l1, d0, D_X_interp):
     l0 = l2 - l1
@@ -445,11 +450,11 @@ def run(cfg: RunConfig) -> Dict[str, Any]:
     ax.set_ylabel("Cut Coordinate [mm]")
     ax.set_zlabel("Specimen Height [mm]")
     plt.tight_layout()
-    save_fig(fig1, os.path.join(cfg.modpath, 'Fig1newone'))
-    print(f"Figure 1 saved as:\n→ {os.path.join(cfg.modpath, 'Fig1newone')}.pdf \n→ {os.path.join(cfg.modpath, 'Fig1newone')}.png")
+    save_fig(fig1, os.path.join(cfg.modpath, 'Fig1'))
+    print(f"Figure 1 saved as:\n→ {os.path.join(cfg.modpath, 'Fig1')}.pdf \n→ {os.path.join(cfg.modpath, 'Fig1')}.png")
 
     # Fig 2: scatter ZZ vs XX
-    plot_scatter(ZZ, XX, "Specimen Height [mm]", "Specimen Edges [mm]", os.path.join(cfg.modpath, 'Fig2new'))
+    plot_scatter(ZZ, XX, "Specimen Height [mm]", "Specimen Edges [mm]", os.path.join(cfg.modpath, 'Fig2'))
 
     # Fig 3: separate min/max
     (X_max, Z_max), (X_min, Z_min) = separate_min_max(XX, ZZ)
@@ -461,23 +466,29 @@ def run(cfg: RunConfig) -> Dict[str, Any]:
     ax3.tick_params(axis='both', labelsize=14)
     ax3.grid(True)
     plt.tight_layout()
-    save_fig(fig3, os.path.join(cfg.modpath, 'Fig3new'))
-    print(f"Figure 3 saved as:\n→ {os.path.join(cfg.modpath, 'Fig3new')}.pdf\n→ {os.path.join(cfg.modpath, 'Fig3new')}.png")
+    save_fig(fig3, os.path.join(cfg.modpath, 'Fig3'))
+    print(f"Figure 3 saved as:\n→ {os.path.join(cfg.modpath, 'Fig3')}.pdf\n→ {os.path.join(cfg.modpath, 'Fig3')}.png")
 
     # Diameter curve
     x_field, D_X, D_X_interp = compute_specimen_diameter(Z_max, X_max, Z_min, X_min, cfg.h_max, cfg.modpath)
 
     # Initialize outputs
     d1 = d2 = strain_tangent = strain_integral = None
+    strain_frustum = None
     strain_tangent_abs = strain_integral_abs = None
+    strain_frustum_abs = None
     L1_variant_1 = d0_auto = None
     strain_tangent_var1 = strain_integral_var_1 = None
+    strain_frustum_var1 = None
     strain_tangent_var2 = strain_integral_var_2 = None
+    strain_frustum_var2 = None
     l1_variant_3 = l2_variant_3 = strain_tangent_var3 = strain_integral_var_3 = None
+    strain_frustum_var3 = None
 
     if D_X_interp is not None:
         d1, d2, strain_tangent = eps_ue(cfg.l2, cfg.l1, cfg.d0, D_X_interp)
         strain_integral = eps_ue_integral(cfg.l2, cfg.l1, cfg.d0, D_X_interp)
+        strain_frustum = strain_frustum_fun(cfg.l2, cfg.l1, cfg.d0, D_X_interp)
 
         print("\n                           +++")
         print("\n                           ")
@@ -486,6 +497,7 @@ def run(cfg: RunConfig) -> Dict[str, Any]:
         print(f'Diameter at l2: {d2:.3f}')
         print(f'Uniform Elongation Strain using Tangent Method :{strain_tangent:.3f} %')
         print(f'Uniform Elongation Strain using Integral Method :{strain_integral:.3f} %')
+        print(f'Uniform Elongation Strain using frustum Method :{strain_frustum:.3f} %')
 
     # Smoothed curves
     D_X_filtered, D_X_derivative, D_X_derivative_smoothed = process_diameter_profile_auto(D_X)
@@ -493,9 +505,10 @@ def run(cfg: RunConfig) -> Dict[str, Any]:
     plot_diameter_comparison(x_field, D_X, D_X_filtered, cfg.modpath)
     plot_derivative_comparison(x_field, D_X_derivative, D_X_derivative_smoothed, cfg.modpath)
 
-    if strain_tangent is not None and strain_integral is not None:
+    if strain_tangent is not None and strain_integral is not None and strain_frustum is not None:
         print(f"Uniform Strain (Tangent): {strain_tangent:.3f} %")
         print(f"Uniform Strain (Integral): {strain_integral:.3f} %")
+        print(f"Uniform Strain (frustum): {strain_frustum:.3f} %")
 
     print("\n                           +++")
     print("\n     Results using hardcoded threshold for l1 and minimum for l2:")
@@ -512,10 +525,12 @@ def run(cfg: RunConfig) -> Dict[str, Any]:
     if D_X_interp is not None and l1_abs is not None:
         d1_abs, d2_abs, strain_tangent_abs = eps_ue(l2_abs, l1_abs, cfg.d0, D_X_interp)
         strain_integral_abs = eps_ue_integral(l2_abs, l1_abs, cfg.d0, D_X_interp)
+        strain_frustum_abs = strain_frustum_fun(l2_abs, l1_abs, cfg.d0, D_X_interp)
         print(f'Diameter at L1 absolute is : {d1_abs:.3f} mm ')
         print(f'Diameter at L2 absolute is : {d2_abs:.3f} mm ')
         print(f'Absolute Uniform Strain ( Tangent ) : {strain_tangent_abs:.3f} % ')
         print(f'Absolute Uniform Strain ( Integral ) : {strain_integral_abs:.3f} % ')
+        print(f'Absolute Uniform Strain ( Frustum ) : {strain_frustum_abs:.3f} % ')
 
     print("\n                           +++")
     print("       Results using Relative threshold for l1 and minimum for l2 :")
@@ -530,7 +545,9 @@ def run(cfg: RunConfig) -> Dict[str, Any]:
         print("\n                           +++")
         print("       Results for Variant 2 :")
         d1_var1, d2_var1, strain_tangent_var2 = eps_ue(l2_abs, L1_variant_1, cfg.d0, D_X_interp)
+        strain_frustum_var2 = strain_frustum_fun(l2_abs, L1_variant_1, cfg.d0, D_X_interp)
         print(f'Relative Uniform Strain ( Tangent ) Var 2: {strain_tangent_var2:.3f} % ')
+        print(f'Relative Uniform Strain ( Frustum ) Var 2: {strain_frustum_var2:.3f} % ')
         print(f'd1 ( Tangent ) Var 1 & 2: {d1_var1:.3f} mm ')
         print(f'd2( Tangent ) Var 1 & 2: {d2_var1:.3f} mm ')
 
@@ -540,7 +557,9 @@ def run(cfg: RunConfig) -> Dict[str, Any]:
         print("\n                           +++")
         print("       Results for Variant 1 :")
         _, _, strain_tangent_var1 = eps_ue(l2_abs, L1_variant_1, d0_auto, D_X_interp)
+        strain_frustum_var1 = strain_frustum_fun(l2_abs, L1_variant_1, d0_auto, D_X_interp)
         print(f'Relative Uniform Strain ( Tangent ) Variant 1: {strain_tangent_var1:.3f} % ')
+        print(f'Relative Uniform Strain ( Frustum ) Variant 1: {strain_frustum_var1:.3f} % ')
 
         strain_integral_var_1 = eps_ue_integral(l2_abs, L1_variant_1, d0_auto, D_X_interp)
         print(f'Relative Uniform Strain ( Integral ) variant 1: {strain_integral_var_1:.3f} % ')
@@ -554,9 +573,11 @@ def run(cfg: RunConfig) -> Dict[str, Any]:
 
     if D_X_interp is not None and l2_variant_3 is not None:
         d1_var3, d2_var3, strain_tangent_var3 = eps_ue(l2_variant_3, l1_variant_3, cfg.d0, D_X_interp)
+        strain_frustum_var3 = strain_frustum_fun(l2_variant_3, l1_variant_3, cfg.d0, D_X_interp)
         print(f'd1 Var 3: {d1_var3:.5f} mm ')
         print(f'd2 Var 3: {d2_var3:.5f} mm ')
         print(f'Relative Uniform Strain ( Tangent ) Variant 3: {strain_tangent_var3:.3f} % ')
+        print(f'Relative Uniform Strain ( Frustum ) Variant 3: {strain_frustum_var3:.3f} % ')
 
         strain_integral_var_3 = eps_ue_integral(l2_variant_3, l1_variant_3, cfg.d0, D_X_interp)
         print(f'Relative Uniform Strain ( Integral ) variant 3: {strain_integral_var_3:.3f} % ')
@@ -585,20 +606,25 @@ def run(cfg: RunConfig) -> Dict[str, Any]:
         "d1_user": float(d1) if d1 is not None else None,
         "d2_user": float(d2) if d2 is not None else None,
         "strain_tangent_user": float(strain_tangent) if strain_tangent is not None else None,
+        "strain_frustum_user": float(strain_frustum) if strain_frustum is not None else None,
         "strain_integral_user": float(strain_integral) if strain_integral is not None else None,
         "l1_abs": float(l1_abs) if 'l1_abs' in locals() and l1_abs is not None else None,
         "l2_abs": float(l2_abs) if 'l2_abs' in locals() and l2_abs is not None else None,
         "strain_tangent_abs": float(strain_tangent_abs) if strain_tangent_abs is not None else None,
+        "strain_frustum_abs": float(strain_frustum_abs) if strain_frustum_abs is not None else None,
         "strain_integral_abs": float(strain_integral_abs) if strain_integral_abs is not None else None,
         "l1_var1": float(L1_variant_1) if L1_variant_1 is not None else None,
         "l2_var1": float(l2_abs) if 'l2_abs' in locals() and l2_abs is not None else None,
         "strain_tangent_var1": float(strain_tangent_var1) if strain_tangent_var1 is not None else None,
+         "strain_frustum_var1": float(strain_frustum_var1) if strain_frustum_var1 is not None else None,
         "strain_integral_var1": float(strain_integral_var_1) if strain_integral_var_1 is not None else None,
         "strain_tangent_var2": float(strain_tangent_var2) if strain_tangent_var2 is not None else None,
+         "strain_frustum_var2": float(strain_frustum_var2) if strain_frustum_var2 is not None else None,
         "strain_integral_var2": float(strain_integral_var_2) if strain_integral_var_2 is not None else None,
         "l1_var3": float(l1_variant_3) if l1_variant_3 is not None else None,
         "l2_var3": float(l2_variant_3) if l2_variant_3 is not None else None,
         "strain_tangent_var3": float(strain_tangent_var3) if strain_tangent_var3 is not None else None,
+        "strain_frustum_var3": float(strain_frustum_var3) if strain_frustum_var3 is not None else None,
         "strain_integral_var3": float(strain_integral_var_3) if 'strain_integral_var_3' in locals() and strain_integral_var_3 is not None else None
     }
 
@@ -741,12 +767,27 @@ def build_runconfigs(args: argparse.Namespace) -> Tuple[List[RunConfig], Dict[st
     return run_cfgs, shared
 
 
-def write_batch_csv(rows: List[Dict[str, Any]], output_csv_path: str) -> None:
+def write_batch_csv(rows: List[Dict[str, Any]], output_csv_path: str, field_order: List[str] | None = None) -> None:
     if not rows:
         print("No rows to write.")
         return
-    # Union of keys across all rows to be robust in case of missing values
-    fieldnames = sorted({k for row in rows for k in row.keys()})
+
+    if field_order is None:
+        # Start from first row's order (insertion order is preserved in dicts)
+        fieldnames = list(rows[0].keys())
+        # Append any new keys that appear in later rows
+        for row in rows[1:]:
+            for k in row.keys():
+                if k not in fieldnames:
+                    fieldnames.append(k)
+    else:
+        # Use the desired order first, then append any extra keys not listed
+        fieldnames = list(field_order)
+        for row in rows:
+            for k in row.keys():
+                if k not in fieldnames:
+                    fieldnames.append(k)
+
     os.makedirs(os.path.dirname(output_csv_path), exist_ok=True) if os.path.dirname(output_csv_path) else None
     with open(output_csv_path, mode="w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
@@ -754,6 +795,7 @@ def write_batch_csv(rows: List[Dict[str, Any]], output_csv_path: str) -> None:
         for row in rows:
             w.writerow(row)
     print(f"\nBatch results saved to {output_csv_path}")
+
 
 
 def main():
@@ -779,7 +821,23 @@ def main():
         all_rows.append(row)
 
     # Write aggregated CSV
-    write_batch_csv(all_rows, args.output_csv)
+    desired_order = [
+    "specimen_id", "specimen_folder",
+    "d0", "l1", "l2", "h_max",
+    "l1_th_fix", "min_factor", "d0_auto_factor", "export_suffix",
+    "error",
+    "d1_user", "d2_user",
+    "strain_tangent_user", "strain_frustum_user", "strain_integral_user",
+    "l1_abs", "l2_abs",
+    "strain_tangent_abs", "strain_frustum_abs", "strain_integral_abs",
+    "l1_var1", "l2_var1",
+    "strain_tangent_var1", "strain_frustum_var1", "strain_integral_var1",
+    "strain_tangent_var2", "strain_frustum_var2", "strain_integral_var2",
+    "l1_var3", "l2_var3",
+    "strain_tangent_var3", "strain_frustum_var3", "strain_integral_var3",
+    ]
+    write_batch_csv(all_rows, args.output_csv, field_order=desired_order)
+
 
     # Exit code: 0 if no error in any row, else 1
     rc = 0 if all((r.get("error") is None) for r in all_rows) else 1
@@ -788,3 +846,14 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+'''
+to change the filename or location, you can give it yourself when you run the script: 
+python multispecimen.py --config run.json --output-csv my_results.csv
+
+want it inside a project folder, just give the path:
+python multispecimen.py --config run.json --output-csv /home/dorin/Projects/Uniform-Elongation-measurement/results/results_batch.csv
+
+
+'''
